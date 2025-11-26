@@ -1,58 +1,104 @@
+/**
+ * GoalCard Component
+ * Displays goal with progress, timeline, and feasibility status
+ */
+
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import ProgressBar from './ProgressBar';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 
 interface GoalCardProps {
+  id: string;
   title: string;
   currentAmount: number;
   targetAmount: number;
-  deadline: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  onPress?: () => void;
+  daysLeft: number;
+  monthlyRequired: number;
+  feasible: boolean;
+  priority: 'low' | 'medium' | 'high';
 }
 
 const GoalCard: React.FC<GoalCardProps> = ({
+  id,
   title,
   currentAmount,
   targetAmount,
-  deadline,
-  icon = 'flag',
-  onPress,
+  daysLeft,
+  monthlyRequired,
+  feasible,
+  priority,
 }) => {
   const progress = (currentAmount / targetAmount) * 100;
 
+  const getPriorityColor = () => {
+    switch (priority) {
+      case 'high':
+        return colors.danger;
+      case 'medium':
+        return colors.warning;
+      case 'low':
+        return colors.success;
+      default:
+        return colors.primary;
+    }
+  };
+
+  const getFeasibilityIcon = () => {
+    return feasible ? 'checkmark-circle' : 'alert-circle';
+  };
+
+  const getFeasibilityColor = () => {
+    return feasible ? colors.success : colors.warning;
+  };
+
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <View style={styles.card}>
       <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Ionicons name={icon} size={24} color={colors.primary} />
-        </View>
-        <View style={styles.headerContent}>
+        <View style={styles.titleContainer}>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.deadline}>Target: {deadline}</Text>
+          <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor() }]}>
+            <Text style={styles.priorityText}>{priority.charAt(0).toUpperCase()}</Text>
+          </View>
+        </View>
+        <Ionicons name={getFeasibilityIcon() as any} size={20} color={getFeasibilityColor()} />
+      </View>
+
+      <ProgressBar progress={progress} color={colors.primary} showPercentage={false} />
+
+      <View style={styles.details}>
+        <View style={styles.detailItem}>
+          <Text style={styles.detailLabel}>Target</Text>
+          <Text style={styles.detailValue}>₹{targetAmount.toLocaleString()}</Text>
+        </View>
+        <View style={styles.detailItem}>
+          <Text style={styles.detailLabel}>Days Left</Text>
+          <Text style={styles.detailValue}>{daysLeft} days</Text>
+        </View>
+        <View style={styles.detailItem}>
+          <Text style={styles.detailLabel}>Monthly Required</Text>
+          <Text style={styles.detailValue}>₹{monthlyRequired.toLocaleString()}</Text>
         </View>
       </View>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%` }]} />
-      </View>
-      <View style={styles.footer}>
-        <Text style={styles.currentAmount}>₹{currentAmount.toLocaleString('en-IN')}</Text>
-        <Text style={styles.targetAmount}>₹{targetAmount.toLocaleString('en-IN')}</Text>
-      </View>
-      <Text style={styles.percentage}>{progress.toFixed(1)}% Complete</Text>
-    </TouchableOpacity>
+
+      {!feasible && (
+        <View style={styles.warningBox}>
+          <Ionicons name="alert" size={16} color={colors.warning} />
+          <Text style={styles.warningText}>Adjust timeline or increase monthly savings</Text>
+        </View>
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
+    marginBottom: 12,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -61,59 +107,67 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  title: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  deadline: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: colors.lightGray,
-    borderRadius: 4,
-    overflow: 'hidden',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
+  titleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  footer: {
+  title: {
+    ...typography.h4,
+    color: colors.text,
+    flex: 1,
+  },
+  priorityBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  priorityText: {
+    ...typography.small,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  details: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
   },
-  currentAmount: {
-    ...typography.bodyBold,
-    color: colors.text,
+  detailItem: {
+    flex: 1,
   },
-  targetAmount: {
-    ...typography.bodyBold,
-    color: colors.textSecondary,
-  },
-  percentage: {
+  detailLabel: {
     ...typography.caption,
-    color: colors.primary,
-    textAlign: 'center',
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  detailValue: {
+    ...typography.small,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+  },
+  warningText: {
+    ...typography.small,
+    color: colors.warning,
+    marginLeft: 8,
+    flex: 1,
   },
 });
 

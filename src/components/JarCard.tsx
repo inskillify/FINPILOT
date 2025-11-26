@@ -1,49 +1,83 @@
+/**
+ * JarCard Component
+ * Displays individual jar with progress, target, and allocation button
+ */
+
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import ProgressBar from './ProgressBar';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 
 interface JarCardProps {
+  id: string;
   name: string;
   currentAmount: number;
   targetAmount: number;
   color?: string;
-  onPress?: () => void;
+  icon?: string;
+  onAllocate?: (jarId: string) => void;
 }
 
 const JarCard: React.FC<JarCardProps> = ({
+  id,
   name,
   currentAmount,
   targetAmount,
   color = colors.primary,
-  onPress,
+  icon = 'cube',
+  onAllocate,
 }) => {
   const progress = (currentAmount / targetAmount) * 100;
+  const remaining = targetAmount - currentAmount;
+  const dailyRecommended = targetAmount / 30;
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <View style={[styles.card, { borderLeftColor: color }]}>
       <View style={styles.header}>
-        <Text style={styles.name}>{name}</Text>
-        <Text style={styles.percentage}>{progress.toFixed(0)}%</Text>
+        <View style={styles.titleContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: color }]}>
+            <Ionicons name={icon as any} size={20} color={colors.white} />
+          </View>
+          <View>
+            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.subtitle}>
+              ₹{currentAmount.toLocaleString()} / ₹{targetAmount.toLocaleString()}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[styles.allocateButton, { backgroundColor: color }]}
+          onPress={() => onAllocate?.(id)}
+        >
+          <Ionicons name="add" size={18} color={colors.white} />
+        </TouchableOpacity>
       </View>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: color }]} />
+
+      <ProgressBar progress={progress} color={color} showPercentage={false} />
+
+      <View style={styles.footer}>
+        <View>
+          <Text style={styles.footerLabel}>Remaining</Text>
+          <Text style={styles.footerValue}>₹{remaining.toLocaleString()}</Text>
+        </View>
+        <View>
+          <Text style={styles.footerLabel}>Daily Recommended</Text>
+          <Text style={styles.footerValue}>₹{dailyRecommended.toLocaleString()}</Text>
+        </View>
       </View>
-      <View style={styles.amounts}>
-        <Text style={styles.currentAmount}>₹{currentAmount.toLocaleString('en-IN')}</Text>
-        <Text style={styles.targetAmount}>of ₹{targetAmount.toLocaleString('en-IN')}</Text>
-      </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -56,36 +90,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   name: {
-    ...typography.bodyBold,
+    ...typography.h4,
     color: colors.text,
   },
-  percentage: {
-    ...typography.bodyBold,
-    color: colors.primary,
+  subtitle: {
+    ...typography.small,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
-  progressBar: {
-    height: 8,
-    backgroundColor: colors.lightGray,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 12,
+  allocateButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  amounts: {
+  footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
   },
-  currentAmount: {
-    ...typography.bodyBold,
-    color: colors.text,
-  },
-  targetAmount: {
+  footerLabel: {
     ...typography.caption,
     color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  footerValue: {
+    ...typography.small,
+    color: colors.text,
+    fontWeight: '600',
   },
 });
 

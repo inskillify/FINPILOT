@@ -1,68 +1,144 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+/**
+ * Portfolio Screen
+ * Display and manage investment portfolio
+ */
+
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import PortfolioCard from '../components/PortfolioCard';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import apiService from '../services/api';
+import { Portfolio, HoldingWithAsset } from '../types/api';
 
-const PortfolioScreen = () => {
-  const portfolio = [
-    { name: 'Stocks', value: 150000, percentage: 35, color: colors.info },
-    { name: 'Mutual Funds', value: 120000, percentage: 28, color: colors.success },
-    { name: 'Fixed Deposits', value: 80000, percentage: 19, color: colors.warning },
-    { name: 'Gold', value: 50000, percentage: 12, color: colors.primary },
-    { name: 'Cash', value: 30000, percentage: 6, color: colors.gray },
-  ];
+const PortfolioScreen = ({ navigation }: any) => {
+  const [loading, setLoading] = useState(true);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const totalValue = portfolio.reduce((sum, item) => sum + item.value, 0);
+  const fetchPortfolio = async () => {
+    try {
+      setError(null);
+      const data = await apiService.getPortfolio();
+      setPortfolio(data);
+    } catch (err: any) {
+      console.error('Error fetching portfolio:', err);
+      setError(err.message || 'Failed to load portfolio');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading portfolio...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Ionicons name="alert-circle" size={48} color={colors.error} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchPortfolio}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!portfolio) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
+        <Text style={styles.emptyText}>No portfolio data</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('AddAsset')}
+        >
+          <Text style={styles.addButtonText}>Add Your First Asset</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const gainLossColor = portfolio.total_gain_loss >= 0 ? colors.success : colors.error;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.netWorthCard}>
-        <Text style={styles.netWorthLabel}>Total Net Worth</Text>
-        <Text style={styles.netWorthValue}>₹{totalValue.toLocaleString('en-IN')}</Text>
-        <Text style={styles.netWorthChange}>+12.5% this month</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Investment Portfolio</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => navigation.navigate('AddAsset')}
+        >
+          <Ionicons name="add" size={24} color={colors.white} />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Asset Allocation</Text>
-        <View style={styles.pieChart}>
-          {portfolio.map((item, index) => (
-            <View
-              key={index}
-              style={[
-                styles.pieSegment,
-                {
-                  backgroundColor: item.color,
-                  height: `${item.percentage}%`,
-                },
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.assetsList}>
-        <Text style={styles.sectionTitle}>Portfolio Breakdown</Text>
-        {portfolio.map((item, index) => (
-          <View key={index} style={styles.assetCard}>
-            <View style={styles.assetHeader}>
-              <View style={styles.assetInfo}>
-                <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-                <Text style={styles.assetName}>{item.name}</Text>
-              </View>
-              <Text style={styles.assetPercentage}>{item.percentage}%</Text>
-            </View>
-            <Text style={styles.assetValue}>₹{item.value.toLocaleString('en-IN')}</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Portfolio Summary */}
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Total Value</Text>
+            <Text style={styles.summaryValue}>₹{portfolio.total_value?.toLocaleString() || 0}</Text>
           </View>
-        ))}
-      </View>
 
-      <View style={styles.insightCard}>
-        <Text style={styles.insightTitle}>Portfolio Insight</Text>
-        <Text style={styles.insightText}>
-          Your portfolio is well-diversified across multiple asset classes. Consider rebalancing if any asset exceeds 40% of your total portfolio.
-        </Text>
-      </View>
-    </ScrollView>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Total Invested</Text>
+            <Text style={styles.summaryValue}>₹{portfolio.total_invested?.toLocaleString() || 0}</Text>
+          </View>
+
+          <View style={[styles.summaryCard, { borderLeftColor: gainLossColor }]}>
+            <Text style={styles.summaryLabel}>Gain/Loss</Text>
+            <Text style={[styles.summaryValue, { color: gainLossColor }]}>
+              ₹{portfolio.total_gain_loss?.toLocaleString() || 0}
+            </Text>
+            <Text style={[styles.summarySubtext, { color: gainLossColor }]}>
+              {portfolio.gain_loss_percentage?.toFixed(2)}%
+            </Text>
+          </View>
+        </View>
+
+        {/* Holdings */}
+        {portfolio.holdings && portfolio.holdings.length > 0 ? (
+          <View style={styles.holdingsContainer}>
+            <Text style={styles.sectionTitle}>Holdings</Text>
+            {portfolio.holdings.map((holding) => (
+              <PortfolioCard
+                key={holding.id}
+                name={holding.asset.name}
+                symbol={holding.asset.symbol}
+                quantity={holding.quantity}
+                currentPrice={holding.asset.current_price}
+                currentValue={holding.current_value}
+                gainLoss={holding.gain_loss}
+                onPress={() => navigation.navigate('HoldingDetail', { holdingId: holding.id })}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="briefcase-outline" size={48} color={colors.textSecondary} />
+            <Text style={styles.emptyText}>No holdings yet</Text>
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() => navigation.navigate('AddAsset')}
+            >
+              <Text style={styles.createButtonText}>Add Your First Holding</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
@@ -71,115 +147,126 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  netWorthCard: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 24,
-    marginHorizontal: 16,
-    marginVertical: 16,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  netWorthLabel: {
-    ...typography.caption,
-    color: colors.darkGray,
-    marginBottom: 8,
-  },
-  netWorthValue: {
-    ...typography.h1,
-    color: colors.black,
-    marginBottom: 8,
-  },
-  netWorthChange: {
-    ...typography.caption,
-    color: colors.success,
-  },
-  chartContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  sectionTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: 16,
-  },
-  pieChart: {
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  pieSegment: {
-    width: '100%',
-  },
-  assetsList: {
-    paddingHorizontal: 16,
-  },
-  assetCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  assetHeader: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  assetInfo: {
-    flexDirection: 'row',
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    ...typography.heading,
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+  addButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
-  assetName: {
-    ...typography.bodyBold,
-    color: colors.text,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.textSecondary,
+    ...typography.body,
   },
-  assetPercentage: {
-    ...typography.bodyBold,
-    color: colors.primary,
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.error,
+    textAlign: 'center',
+    ...typography.body,
   },
-  assetValue: {
-    ...typography.h3,
-    color: colors.text,
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
   },
-  insightCard: {
-    backgroundColor: colors.primaryLight,
+  retryButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  summaryContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  summaryCard: {
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
   },
-  insightTitle: {
-    ...typography.bodyBold,
+  summaryLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 8,
   },
-  insightText: {
-    ...typography.caption,
-    color: colors.darkGray,
-    lineHeight: 20,
+  summarySubtext: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  holdingsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+    ...typography.heading,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 40,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.textSecondary,
+    ...typography.body,
+  },
+  createButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  createButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

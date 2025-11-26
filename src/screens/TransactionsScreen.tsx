@@ -1,67 +1,116 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+/**
+ * Transactions Screen
+ * Display and manage user transactions
+ */
+
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import TransactionItem from '../components/TransactionItem';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import apiService from '../services/api';
+import { Transaction } from '../types/api';
 
-const TransactionsScreen = () => {
-  const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
+const TransactionsScreen = ({ navigation }: any) => {
+  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [skip, setSkip] = useState(0);
+  const limit = 50;
 
-  const transactions = [
-    { id: '1', title: 'Grocery Store', category: 'Food', amount: -2500, date: '25 Nov 2025', type: 'expense' as const },
-    { id: '2', title: 'Salary Credit', category: 'Income', amount: 45000, date: '24 Nov 2025', type: 'income' as const },
-    { id: '3', title: 'Electric Bill', category: 'Utilities', amount: -1200, date: '23 Nov 2025', type: 'expense' as const },
-    { id: '4', title: 'Restaurant', category: 'Food', amount: -850, date: '23 Nov 2025', type: 'expense' as const },
-    { id: '5', title: 'Freelance Payment', category: 'Income', amount: 15000, date: '22 Nov 2025', type: 'income' as const },
-    { id: '6', title: 'Uber Ride', category: 'Transport', amount: -320, date: '22 Nov 2025', type: 'expense' as const },
-  ];
+  const fetchTransactions = async (skipValue: number = 0) => {
+    try {
+      setError(null);
+      const data = await apiService.getTransactions(skipValue, limit);
+      if (skipValue === 0) {
+        setTransactions(data.items || []);
+      } else {
+        setTransactions([...transactions, ...(data.items || [])]);
+      }
+    } catch (err: any) {
+      console.error('Error fetching transactions:', err);
+      setError(err.message || 'Failed to load transactions');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filteredTransactions = transactions.filter(t => {
-    if (filter === 'all') return true;
-    return t.type === filter;
-  });
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  const handleLoadMore = () => {
+    const newSkip = skip + limit;
+    setSkip(newSkip);
+    fetchTransactions(newSkip);
+  };
+
+  if (loading && transactions.length === 0) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading transactions...</Text>
+      </View>
+    );
+  }
+
+  if (error && transactions.length === 0) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Ionicons name="alert-circle" size={48} color={colors.error} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => fetchTransactions()}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.filterContainer}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Transactions</Text>
         <TouchableOpacity
-          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
-          onPress={() => setFilter('all')}
+          style={styles.addButton}
+          onPress={() => navigation.navigate('AddTransaction')}
         >
-          <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'income' && styles.filterButtonActive]}
-          onPress={() => setFilter('income')}
-        >
-          <Text style={[styles.filterText, filter === 'income' && styles.filterTextActive]}>Income</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'expense' && styles.filterButtonActive]}
-          onPress={() => setFilter('expense')}
-        >
-          <Text style={[styles.filterText, filter === 'expense' && styles.filterTextActive]}>Expense</Text>
+          <Ionicons name="add" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.dateHeader}>November 2025</Text>
-        {filteredTransactions.map((transaction) => (
-          <TransactionItem
-            key={transaction.id}
-            title={transaction.title}
-            category={transaction.category}
-            amount={transaction.amount}
-            date={transaction.date}
-            type={transaction.type}
-          />
-        ))}
-      </ScrollView>
-
-      <TouchableOpacity style={styles.fab}>
-        <Ionicons name="add" size={28} color={colors.black} />
-      </TouchableOpacity>
+      {transactions.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="document-outline" size={48} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>No transactions yet</Text>
+          <TouchableOpacity
+            style={styles.addTransactionButton}
+            onPress={() => navigation.navigate('AddTransaction')}
+          >
+            <Text style={styles.addTransactionButtonText}>Add Transaction</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={transactions}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TransactionItem
+              title={item.description}
+              category={item.category}
+              amount={item.amount}
+              date={new Date(item.date).toLocaleDateString()}
+              type={item.type}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loading ? <ActivityIndicator size="small" color={colors.primary} /> : null
+          }
+        />
+      )}
     </View>
   );
 };
@@ -71,58 +120,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  filterContainer: {
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.white,
+    paddingVertical: 16,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginHorizontal: 4,
-    borderRadius: 8,
-    backgroundColor: colors.lightGray,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    ...typography.heading,
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  filterButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  filterText: {
-    ...typography.caption,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
     color: colors.textSecondary,
+    ...typography.body,
   },
-  filterTextActive: {
-    color: colors.black,
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.error,
+    textAlign: 'center',
+    ...typography.body,
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontSize: 16,
     fontWeight: '600',
   },
-  scrollView: {
+  emptyContainer: {
     flex: 1,
-  },
-  dateHeader: {
-    ...typography.bodyBold,
-    color: colors.text,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.textSecondary,
+    ...typography.body,
+  },
+  addTransactionButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  addTransactionButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
 });
 

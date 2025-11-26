@@ -1,96 +1,142 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
+/**
+ * Alerts Screen
+ * Display and manage user alerts
+ */
+
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AlertCard from '../components/AlertCard';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import apiService from '../services/api';
+import { Alert } from '../types/api';
 
-const AlertsScreen = () => {
-  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+const AlertsScreen = ({ navigation }: any) => {
+  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const alerts = [
-    {
-      id: '1',
-      title: 'Bill Payment Due',
-      message: 'Your electricity bill of ₹1,200 is due in 3 days',
-      time: '2 hours ago',
-      type: 'warning',
-      icon: 'warning' as const,
-    },
-    {
-      id: '2',
-      title: 'Goal Achievement',
-      message: 'Congratulations! You reached 50% of your vacation savings goal',
-      time: '1 day ago',
-      type: 'success',
-      icon: 'checkmark-circle' as const,
-    },
-    {
-      id: '3',
-      title: 'Large Transaction',
-      message: 'A transaction of ₹15,000 was detected in your account',
-      time: '2 days ago',
-      type: 'info',
-      icon: 'information-circle' as const,
-    },
-    {
-      id: '4',
-      title: 'Budget Alert',
-      message: 'You have exceeded your food budget by 20% this month',
-      time: '3 days ago',
-      type: 'error',
-      icon: 'alert-circle' as const,
-    },
-  ];
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'warning':
-        return colors.warning;
-      case 'success':
-        return colors.success;
-      case 'info':
-        return colors.info;
-      case 'error':
-        return colors.error;
-      default:
-        return colors.gray;
+  const fetchAlerts = async () => {
+    try {
+      setError(null);
+      const data = await apiService.getAlerts();
+      setAlerts(data || []);
+    } catch (err: any) {
+      console.error('Error fetching alerts:', err);
+      setError(err.message || 'Failed to load alerts');
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
+
+  const handleDismiss = async (alertId: string) => {
+    try {
+      await apiService.dismissAlert(alertId);
+      setAlerts(alerts.filter((a) => a.id !== alertId));
+    } catch (err) {
+      console.error('Error dismissing alert:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading alerts...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Ionicons name="alert-circle" size={48} color={colors.error} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchAlerts}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const criticalAlerts = alerts.filter((a) => a.severity === 'critical');
+  const warningAlerts = alerts.filter((a) => a.severity === 'warning');
+  const infoAlerts = alerts.filter((a) => a.severity === 'info');
+
   return (
     <View style={styles.container}>
-      <View style={styles.settingsCard}>
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Ionicons name="notifications" size={24} color={colors.primary} />
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>Push Notifications</Text>
-              <Text style={styles.settingSubtitle}>Receive alerts about your finances</Text>
-            </View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Alerts</Text>
+        <View style={styles.badgeContainer}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{alerts.length}</Text>
           </View>
-          <Switch
-            value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
-            trackColor={{ false: colors.lightGray, true: colors.primaryLight }}
-            thumbColor={notificationsEnabled ? colors.primary : colors.gray}
-          />
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Recent Alerts</Text>
-        {alerts.map((alert) => (
-          <TouchableOpacity key={alert.id} style={styles.alertCard}>
-            <View style={[styles.iconContainer, { backgroundColor: getTypeColor(alert.type) + '20' }]}>
-              <Ionicons name={alert.icon} size={24} color={getTypeColor(alert.type)} />
-            </View>
-            <View style={styles.alertContent}>
-              <Text style={styles.alertTitle}>{alert.title}</Text>
-              <Text style={styles.alertMessage}>{alert.message}</Text>
-              <Text style={styles.alertTime}>{alert.time}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {alerts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+            <Text style={styles.emptyText}>All caught up!</Text>
+            <Text style={styles.emptySubText}>No alerts at the moment</Text>
+          </View>
+        ) : (
+          <>
+            {/* Critical Alerts */}
+            {criticalAlerts.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Critical</Text>
+                {criticalAlerts.map((alert) => (
+                  <AlertCard
+                    key={alert.id}
+                    title={alert.title}
+                    message={alert.message}
+                    severity={alert.severity}
+                    onDismiss={() => handleDismiss(alert.id)}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Warning Alerts */}
+            {warningAlerts.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Warnings</Text>
+                {warningAlerts.map((alert) => (
+                  <AlertCard
+                    key={alert.id}
+                    title={alert.title}
+                    message={alert.message}
+                    severity={alert.severity}
+                    onDismiss={() => handleDismiss(alert.id)}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Info Alerts */}
+            {infoAlerts.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Information</Text>
+                {infoAlerts.map((alert) => (
+                  <AlertCard
+                    key={alert.id}
+                    title={alert.title}
+                    message={alert.message}
+                    severity={alert.severity}
+                    onDismiss={() => handleDismiss(alert.id)}
+                  />
+                ))}
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -101,88 +147,97 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  settingsCard: {
-    backgroundColor: colors.white,
-    marginHorizontal: 16,
-    marginVertical: 16,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  settingItem: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  settingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  settingTitle: {
-    ...typography.bodyBold,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 4,
+    ...typography.heading,
   },
-  settingSubtitle: {
-    ...typography.small,
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  badge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.textSecondary,
+    ...typography.body,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: colors.error,
+    textAlign: 'center',
+    ...typography.body,
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 40,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    ...typography.heading,
+  },
+  emptySubText: {
+    marginTop: 4,
+    fontSize: 14,
     color: colors.textSecondary,
   },
-  scrollView: {
-    flex: 1,
+  section: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   sectionTitle: {
-    ...typography.bodyBold,
+    fontSize: 16,
+    fontWeight: '600',
     color: colors.text,
-    paddingHorizontal: 16,
     marginBottom: 12,
-  },
-  alertCard: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  alertContent: {
-    flex: 1,
-  },
-  alertTitle: {
-    ...typography.bodyBold,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  alertMessage: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  alertTime: {
-    ...typography.small,
-    color: colors.gray,
+    ...typography.heading,
   },
 });
 
